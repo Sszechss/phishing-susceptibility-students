@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command local run (without Docker): creates .venv, installs pinned deps, runs tests + pipeline.
+# One-command local run (without Docker): creates .venv, installs pinned deps, runs tests + pipeline. build: add local run script
 set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 -m venv .venv
