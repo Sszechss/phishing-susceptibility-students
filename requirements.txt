@@ -1,0 +1,9 @@
+# Exact pins of the FULL dependency tree (direct + transitive), tested with Python 3.13.
+# Install with:  pip install --no-deps -r requirements.txt
+numpy==2.5.3
+pandas==3.0.5
+python-dateutil==2.9.0.post0
+PyYAML==6.0.3
+scipy==1.18.1
+six==1.17.0
+tzdata==2025.2 ; sys_platform == "win32"
