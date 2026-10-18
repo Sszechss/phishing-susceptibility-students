@@ -1,0 +1,83 @@
+# =============================================================================
+# Experiment configuration — Predictors of Phishing Susceptibility (Task 2)
+# All experiment parameters live here; src/benchmark.py contains no hard-coded
+# study settings. Change this file, not the code, to re-run under new settings.
+# =============================================================================
+
+experiment:
+  name: phishing-susceptibility-students
+  version: 0.1.0
+  mode: sample              # sample = pipeline dry-run on /data/sample; full = Week 7 collection
+
+paths:
+  input_csv: data/sample/survey_sample.csv   # full run: data/raw/survey_responses.csv (git-ignored)
+  output_dir: results                         # each run writes results/<run_id>/
+
+analysis:
+  alpha: 0.05
+  multiple_comparison: holm   # Holm–Bonferroni across the three primary tests (RQ1–RQ3)
+  chance_level: 0.50          # binary phishing/legitimate judgement → 50% = guessing baseline
+  min_n_per_group: 2          # below this a test is skipped (not an error) — only matters for tiny samples
+
+# ---- Independent variables -------------------------------------------------
+groups:
+  field_of_study:             # RQ1
+    column: major_group
+    treatment: IT             # IT / information-security majors
+    control: NonIT            # baseline group
+  training:                   # RQ2
+    column: prior_training
+    treatment: 1              # completed any formal cybersecurity / phishing training
+    control: 0                # baseline group
+  covariates:                 # controlled variables entered into the RQ2 regression
+    - academic_year
+    - digital_literacy
+
+confidence:
+  self_rating_column: self_confidence   # RQ3 IV: pre-test Likert, "How confident are you that you can spot a phishing message?"
+  self_rating_scale: [1, 7]
+  item_scale: [50, 100]                 # per-vignette confidence, "How sure are you? 50% (guessing) – 100% (certain)"
+
+# ---- Respondent-level quality filters (applied before analysis) ------------
+quality_filters:
+  require_consent: true
+  attention_check:
+    column: attention_check
+    expected: 5               # instructed item: "Select 'Strongly agree' for this question"
+  min_completion_seconds: 180 # faster than 10 s per vignette = not reading the scenarios
+  max_completion_seconds: 3600
+  max_missing_item_share: 0.10
+  exclude_straightliners: true  # identical answer to all 18 vignettes
+
+# ---- Study-level guardrail metrics ------------------------------------------
+guardrails:
+  max_exclusion_rate: 0.20
+  min_group_size: 30          # per comparison group, needed for adequate power (target n ≥ 80–100 total)
+  min_reliability_kr20: 0.60  # internal consistency of the 18-item detection test
+  item_difficulty_range: [0.20, 0.95]  # share correct; items outside are too hard / too easy
+  max_false_alarm_increase: 0.10  # treatment group may not flag legitimate messages >10 pp more often than baseline
+  max_runtime_seconds: 60
+  fail_on_violation: false    # true → non-zero exit code if any guardrail fails (use for full mode)
+
+# ---- Instrument: 18 vignettes (answer key) ----------------------------------
+# is_phishing: 1 = phishing, 0 = legitimate. Each cue type has 4 phishing + 2 legitimate
+# items, so accuracy by cue type is not confounded with the share of phishing items.
+items:
+  V01: {is_phishing: 1, cue: urgency,     channel: email}
+  V02: {is_phishing: 1, cue: authority,   channel: email}
+  V03: {is_phishing: 0, cue: familiarity, channel: messenger}
+  V04: {is_phishing: 0, cue: urgency,     channel: sms}
+  V05: {is_phishing: 1, cue: familiarity, channel: messenger}
+  V06: {is_phishing: 1, cue: authority,   channel: sms}
+  V07: {is_phishing: 1, cue: urgency,     channel: sms}
+  V08: {is_phishing: 0, cue: authority,   channel: email}
+  V09: {is_phishing: 1, cue: familiarity, channel: email}
+  V10: {is_phishing: 1, cue: urgency,     channel: email}
+  V11: {is_phishing: 1, cue: authority,   channel: email}
+  V12: {is_phishing: 0, cue: familiarity, channel: email}
+  V13: {is_phishing: 0, cue: urgency,     channel: email}
+  V14: {is_phishing: 1, cue: familiarity, channel: sms}
+  V15: {is_phishing: 0, cue: authority,   channel: email}
+  V16: {is_phishing: 1, cue: urgency,     channel: messenger}
+  V17: {is_phishing: 1, cue: authority,   channel: messenger}
+  V18: {is_phishing: 1, cue: familiarity, channel: email}
