@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Опрос: распознавание фишинговых сообщений</title>
+<style>
+:root{--bg:#f6f7f9;--ink:#1d2330;--mute:#5f6878;--line:#dfe3ea;--acc:#1f5fbf}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:8px 0 4px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:16px}
+.mute{color:var(--mute);font-size:14px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;background:var(--acc);width:0}
+label.opt{display:flex;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:pointer}
+label.opt:has(input:checked){border-color:var(--acc);background:#eef4fd}
+input[type=text],input[type=number]{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+button{font:inherit;padding:11px 18px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer}
+button.sec{background:#fff;color:var(--acc)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.row>button{flex:1;min-width:120px}
+.scale{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.scale button{flex:1;min-width:46px;padding:10px 0;background:#fff;color:var(--acc)}
+.scale button.sel{background:var(--acc);color:#fff}
+.msg{border:1px solid var(--line);border-radius:8px;background:#fcfcfd;overflow:hidden}
+.msg .h{padding:9px 14px;border-bottom:1px solid var(--line);font-size:14px}
+.msg .h b{display:inline-block;width:64px;color:var(--mute);font-weight:500}
+.msg .b{padding:14px;white-space:pre-line}
+.bub{display:inline-block;max-width:92%;background:#e8eef8;border-radius:14px;padding:10px 14px;white-space:pre-line}
+.chat{padding:14px;background:#f1f3f7}
+.chat .who{font-size:13px;color:var(--mute);margin-bottom:6px}
+.lnk{color:var(--acc);text-decoration:underline;word-break:break-all}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:#fff3d6;color:#7a5a00;margin-bottom:8px}
+textarea{width:100%;min-height:120px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Как студенты распознают фишинговые сообщения</h1>
+<div class="mute">Учебное исследование · ~10–15 минут · анонимно</div>
+<div class="bar"><i id="bar"></i></div>
+<div id="app"></div>
+</main>
+<script>
+"use strict";
+/* Все сообщения вымышленные, адреса на зарезервированном домене .example.
+   key: true = фишинг. cue: urgency | authority | familiarity. ch: email | sms | messenger */
+const PRACTICE = [
+ {id:"P1",cue:"urgency",ch:"email",key:true,from:"Курьерская служба <delivery@parcel-notice.example>",subj:"Заказ задерживается",body:"Ваш заказ задерживается. Подтвердите адрес доставки в течение 3 часов, иначе заказ вернётся отправителю:",link:"http://parcel-notice.example/address"},
+ {id:"P2",cue:"authority",ch:"email",key:false,from:"Деканат <dekanat@univ.example>",subj:"Расписание консультаций",body:"Расписание консультаций на следующую неделю размещено на портале университета в разделе «Студентам»."}
+];
+const ITEMS = [
+ {id:"V01",cue:"urgency",ch:"email",key:true,from:"IT-служба университета <account-security@univ-login.example>",subj:"Ваш аккаунт будет заблокирован через 2 часа",body:"Мы обнаружили вход с нового устройства. Чтобы сохранить доступ к почте и порталу, подтвердите данные в течение 2 часов:",link:"http://univ-login.example/verify"},
+ {id:"V02",cue:"authority",ch:"email",key:true,from:"Деканат <dekanat@univ-office.example>",subj:"Подтверждение данных студента",body:"Деканат проводит сверку списков. Подтвердите номер студенческого билета и пароль от личного кабинета через форму:",link:"http://forms-univ-office.example/confirm"},
+ {id:"V03",cue:"familiarity",ch:"messenger",key:false,from:"Данияр (одногруппник), чат «Методы исследований»",body:"Скинул ссылку на страницу нашего курса, там лекции и задания:",link:"https://portal.univ.example/course/research-methods"},
+ {id:"V04",cue:"urgency",ch:"sms",key:false,from:"ExampleBank",body:"Код подтверждения: 482916. Никому не сообщайте код. Действует 5 минут."},
+ {id:"V05",cue:"familiarity",ch:"messenger",key:true,from:"Айдос (новый номер)",body:"Привет! Проголосуй за меня в конкурсе, это быстро, нужно только войти через мессенджер:",link:"http://vote-contest-now.example/login"},
+ {id:"V06",cue:"authority",ch:"sms",key:true,from:"GOV-TAX",body:"Налоговая служба: у вас неоплаченный штраф 15 000 ₸. Оплатите сегодня, иначе дело передадут в суд:",link:"http://short-pay.example/x7"},
+ {id:"V07",cue:"urgency",ch:"sms",key:true,from:"Почта",body:"Ваша посылка задержана на таможне. Оплатите сбор 490 ₸ в течение 24 часов:",link:"http://parcel-fee-track.example/pay"},
+ {id:"V08",cue:"authority",ch:"email",key:false,from:"IT-отдел <it@univ.example>",subj:"Плановые технические работы в субботу",body:"В субботу с 02:00 до 04:00 портал университета будет недоступен из-за плановых работ. Ничего делать не нужно. Актуальную информацию смотрите на официальном портале университета."},
+ {id:"V09",cue:"familiarity",ch:"email",key:true,from:"Преподаватель Иванов <ivanov@univ-docs.example>",subj:"Документ для вас",body:"Поделился с вами файлом «Задание по методам исследований». Откройте и войдите через университетский аккаунт:",link:"http://univ-docs.example/share/9aK"},
+ {id:"V10",cue:"urgency",ch:"email",key:true,from:"Отдел стипендий <stipend@univ-payments.example>",subj:"Выплата стипендии не пройдёт",body:"Выплата не может быть произведена. Обновите банковские реквизиты сегодня, иначе стипендия будет отменена:",link:"http://univ-payments.example/bank"},
+ {id:"V11",cue:"authority",ch:"email",key:true,from:"Ректор <rector@univ-board.example>",subj:"Личная просьба",body:"Нужна помощь с организацией мероприятия. Купите 5 подарочных карт по 20 000 ₸ и пришлите коды мне в ответном письме. Сейчас нет возможности звонить."},
+ {id:"V12",cue:"familiarity",ch:"email",key:false,from:"Библиотека <library@univ.example>",subj:"Срок возврата книги «Статистика для всех»",body:"Напоминаем, что книга, которую вы взяли 3 ноября, должна быть возвращена до 17 ноября. Продлить можно в личном кабинете библиотеки."},
+ {id:"V13",cue:"urgency",ch:"email",key:false,from:"Регистратор <registrar@univ.example>",subj:"Регистрация на экзамены закрывается завтра",body:"Регистрация на зимнюю сессию закрывается завтра в 18:00. Зайдите на портал университета и выберите даты экзаменов:",link:"https://portal.univ.example/exams"},
+ {id:"V14",cue:"familiarity",ch:"sms",key:true,from:"+7 705 000 00 00",body:"Привет, это я! Потерял телефон, это мой новый номер. Можешь срочно перевести 30 000 ₸? Верну вечером."},
+ {id:"V15",cue:"authority",ch:"email",key:false,from:"Регистратор <registrar@univ.example>",subj:"Заявка на справку №2841 принята",body:"Вы подали заявку на справку об обучении (№2841) 5 ноября. Справка будет готова в течение 3 рабочих дней, статус можно посмотреть в личном кабинете."},
+ {id:"V16",cue:"urgency",ch:"messenger",key:true,from:"Поддержка аккаунта",body:"Ваш аккаунт будет удалён через 1 час из-за нарушений. Подайте апелляцию:",link:"http://appeal-account.example/form"},
+ {id:"V17",cue:"authority",ch:"messenger",key:true,from:"Official Support",body:"Мы отправили вам код подтверждения. Для защиты аккаунта пришлите его нам в ответ."},
+ {id:"V18",cue:"familiarity",ch:"email",key:true,from:"StreamBox <no-reply@streambox-account.example>",subj:"Сброс пароля",body:"Вы запросили сброс пароля. Если это были вы, подтвердите вход:",link:"http://streambox-account.example/reset"}
+];
+const ENDPOINT = "";   // внутри Google Apps Script не нужен (используется google.script.run)
+
+const rid = "r" + Math.random().toString(36).slice(2, 10);
+const t_start = Date.now();
+const bg = {};
+const log = [];
+const app = document.getElementById("app"), bar = document.getElementById("bar");
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const shuffle = a => { a = a.slice(); for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
+const queue = PRACTICE.map(x => ({...x, phase:"warmup"})).concat(shuffle(ITEMS).map((x,i) => ({...x, phase:"eval", order:i+1})));
+let idx = 0;
+const setBar = f => { bar.style.width = Math.round(f*100) + "%"; };
+const scale = (vals, cls) => `<div class="scale ${cls||""}">${vals.map(v => `<button class="sec" data-v="${v}">${v}</button>`).join("")}</div>`;
+function pick(container, cb){ container.querySelectorAll("button").forEach(b => b.onclick = () => { container.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x===b)); cb(b.dataset.v); }); }
+
+function sConsent(){
+  setBar(0);
+  app.innerHTML = `<div class="card"><p><b>Добро пожаловать!</b> Сначала несколько вопросов о вас, затем вы увидите 20 вымышленных сообщений (письма, СМС, мессенджер). Для каждого нужно решить, это <b>фишинг</b> или <b>настоящее</b> сообщение, и оценить уверенность.</p>
+  <p class="mute">Опрос анонимный: имя, почта и номер телефона не собираются. Участие добровольное, можно закрыть страницу в любой момент. Все адреса и номера вымышлены, ссылки не кликабельны. Первые 2 сообщения тренировочные и в анализ не идут. Отвечайте так, как отреагировали бы в жизни, не ищите ответы в интернете.</p>
+  <label class="opt"><input type="checkbox" id="cons"> Я прочитал(а) информацию и добровольно и анонимно соглашаюсь участвовать</label>
+  <div class="row"><button id="go" disabled>Начать</button></div></div>`;
+  const c = document.getElementById("cons");
+  c.onchange = () => document.getElementById("go").disabled = !c.checked;
+  document.getElementById("go").onclick = () => { bg.consent = "yes"; sBackground(); };
+}
+
+function sBackground(){
+  setBar(0.05);
+  app.innerHTML = `<div class="card"><p><b>О вас</b></p>
+  <p class="mute">Ваша специальность (например, «Финансы», «Информационные системы»)</p><input type="text" id="major" maxlength="80">
+  <p class="mute">К какой группе относится ваша специальность?</p>
+  <label class="opt"><input type="radio" name="mg" value="IT"> IT (CS, IS, кибербезопасность, программная инженерия)</label>
+  <label class="opt"><input type="radio" name="mg" value="NonIT"> Другое</label>
+  <p class="mute">Курс обучения</p>${scale([1,2,3,4],"ay")}
+  <p class="mute">Возраст</p><input type="number" id="age" min="16" max="70">
+  <p class="mute">Проходили ли вы курс или тренинг по кибербезопасности или защите от фишинга?</p>
+  <label class="opt"><input type="radio" name="pt" value="1"> Да</label><label class="opt"><input type="radio" name="pt" value="0"> Нет</label>
+  <div id="hrsBox" style="display:none"><p class="mute">Сколько часов примерно в сумме?</p><input type="number" id="hrs" min="0" max="500"></div>
+  <p class="mute">Как вы оцениваете свои навыки работы с компьютером и интернетом? (1 — очень низкие, 5 — очень высокие)</p>${scale([1,2,3,4,5],"dl")}
+  <p class="mute">Насколько вы уверены, что отличите фишинговое сообщение от настоящего? (1 — совсем не уверен, 7 — полностью уверен)</p>${scale([1,2,3,4,5,6,7],"sc")}
+  <div class="row"><button id="next" disabled>Дальше</button></div></div>`;
+  const chk = () => {
+    bg.major = document.getElementById("major").value.trim();
+    bg.major_group = (document.querySelector("input[name=mg]:checked")||{}).value || null;
+    bg.age = parseInt(document.getElementById("age").value) || null;
+    const pt = (document.querySelector("input[name=pt]:checked")||{}).value;
+    bg.prior_training = pt === undefined ? null : +pt;
+    document.getElementById("hrsBox").style.display = bg.prior_training === 1 ? "block" : "none";
+    bg.training_hours = bg.prior_training === 1 ? (parseInt(document.getElementById("hrs").value) || 0) : 0;
+    document.getElementById("next").disabled = !(bg.major && bg.major_group && bg.academic_year && bg.age && bg.prior_training !== null && bg.digital_literacy && bg.self_confidence);
+  };
+  app.querySelectorAll("input").forEach(i => { i.oninput = chk; i.onchange = chk; });
+  pick(app.querySelector(".ay"), v => { bg.academic_year = +v; chk(); });
+  pick(app.querySelector(".dl"), v => { bg.digital_literacy = +v; chk(); });
+  pick(app.querySelector(".sc"), v => { bg.self_confidence = +v; chk(); });
+  document.getElementById("next").onclick = () => { idx = 0; sItem(); };
+}
+
+function render(m){
+  const link = m.link ? `\n<span class="lnk">${esc(m.link)}</span>` : "";
+  if (m.ch === "email") return `<div class="msg"><div class="h"><b>От:</b>${esc(m.from)}</div><div class="h"><b>Тема:</b>${esc(m.subj)}</div><div class="b">${esc(m.body)}${link}</div></div>`;
+  const lab = m.ch === "sms" ? "СМС" : "Мессенджер";
+  return `<div class="msg"><div class="h"><b>${lab}:</b>${esc(m.from)}</div><div class="chat"><div class="bub">${esc(m.body)}${link}</div></div></div>`;
+}
+
+function sItem(){
+  if (idx >= queue.length) return sAttention();
+  const m = queue[idx];
+  setBar(0.1 + 0.8*idx/queue.length);
+  app.innerHTML = `<div class="card">${m.phase==="warmup" ? '<span class="tag">Тренировочное сообщение, в анализ не идёт</span>' : ""}
+  <div class="mute">Сообщение ${idx+1} из ${queue.length}</div><div style="margin-top:8px">${render(m)}</div>
+  <p style="margin:16px 0 0"><b>Это сообщение:</b></p>
+  <div class="row"><button id="bP">Фишинг</button><button id="bL" class="sec">Настоящее</button></div></div>`;
+  const t0 = performance.now();
+  const ans = a => sConf(m, a, Math.round(performance.now() - t0));
+  document.getElementById("bP").onclick = () => ans("phishing");
+  document.getElementById("bL").onclick = () => ans("legit");
+}
+
+function sConf(m, a, rt){
+  app.innerHTML = `<div class="card"><p><b>Насколько вы уверены в ответе?</b></p><p class="mute">50% — просто угадал(а), 100% — полностью уверен(а)</p>${scale([50,60,70,80,90,100])}</div>`;
+  pick(app.querySelector(".scale"), v => {
+    log.push({respondent:rid, phase:m.phase, item_id:m.id, order:m.order||0, cue_type:m.cue, channel:m.ch,
+      is_phishing:m.key, answer:a, correct:(a==="phishing")===m.key, response_time_ms:rt, confidence_pct:+v});
+    idx++; sItem();
+  });
+}
+
+function sAttention(){
+  setBar(0.92);
+  app.innerHTML = `<div class="card"><p><b>Последний вопрос</b></p><p>Чтобы показать, что вы читаете внимательно, выберите «Полностью согласен» (5).</p>
+  <p class="mute">1 — совсем не согласен … 5 — полностью согласен</p>${scale([1,2,3,4,5])}</div>`;
+  pick(app.querySelector(".scale"), v => { bg.attention_check = +v; sDone(); });
+}
+
+function sDone(){
+  setBar(1);
+  bg.completion_seconds = Math.round((Date.now() - t_start)/1000);
+  const rows = log.map(r => JSON.stringify({...r, ...bg}));
+  const jsonl = rows.join("\n");
+  const ev = log.filter(r => r.phase === "eval"), ok = ev.filter(r => r.correct).length;
+  app.innerHTML = `<div class="card"><p><b>Спасибо! Верных ответов: ${ok} из ${ev.length}.</b></p>
+  <p class="mute" id="note">Ваши ответы отправляются исследователям. Если появится ошибка, нажмите «Скопировать ответы» и отправьте текст вручную.</p>
+  <textarea id="out" readonly>${esc(jsonl)}</textarea><div class="row"><button id="copy">Скопировать ответы</button></div><p id="msg" class="mute"></p></div>`;
+  const msg = document.getElementById("msg");
+  const gas = typeof google !== "undefined" && google.script && google.script.run;
+  const okf = () => { msg.textContent = "Ответы отправлены. Спасибо!"; };
+  const errf = () => { msg.textContent = "Не удалось отправить. Скопируйте ответы кнопкой и отправьте вручную."; };
+  if (gas) { msg.textContent = "Отправка…"; google.script.run.withSuccessHandler(okf).withFailureHandler(errf).saveAnswers(jsonl); }
+  else if (ENDPOINT) { msg.textContent = "Отправка…"; fetch(ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:jsonl}).then(okf).catch(errf); }
+  document.getElementById("copy").onclick = async () => {
+    const ta = document.getElementById("out");
+    try { await navigator.clipboard.writeText(ta.value); msg.textContent = "Скопировано."; }
+    catch(e){ ta.select(); msg.textContent = "Текст выделен: нажмите Ctrl+C."; }
+  };
+}
+sConsent();
+</script>
+</body>
+</html>
