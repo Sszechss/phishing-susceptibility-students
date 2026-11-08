@@ -140,3 +140,58 @@ phishing messages are sent to anyone.** The sample file contains synthetic data 
 ## License
 
 Code and documentation are released under the [MIT License](LICENSE).
+
+---
+
+## Task 3: Research results, data analysis and visualization
+
+Task 3 adds the real survey data (40 classmates, 800 rows), an executed analysis notebook and publication-ready figures. The 18 messages in the survey follow the instrument from Task 2 (`docs/survey_instrument.md`, answer key in `configs/config.yaml`), plus 2 practice messages. The survey runs as a Google Apps Script web app that saves every answer to a Google Sheet (`survey/`).
+
+> **Data status.** `data/raw/test_run.jsonl` holds the real answers of 40 classmates (convenience sample, 800 rows). The sample is modest, so the results are preliminary.
+
+### Mapping of benchmark terms
+
+| Benchmark term | In this study |
+|---|---|
+| Latency (ms) | Response time of a student to one message (s) |
+| Load | Social-engineering cue type (urgency, authority, familiarity) |
+| Error rate (guardrail) | Share of wrong answers |
+| Warm-up | The 2 practice messages (`phase = warmup`), discarded |
+| Baseline vs Proposed | Students without vs with prior cybersecurity training |
+
+### Task 3 files
+
+```
+data/raw/test_run.jsonl              raw answers (warm-up and evaluation, one answer per line)
+data/processed/metrics_summary.csv   aggregated metrics by group, cue type and channel
+docs/domain_model.md                 STRIDE threat model + metric collection points
+notebooks/01_data_analysis.ipynb     executed, reproducible analysis (seed 42)
+reports/figures/                     fig1 / fig2 as .pdf and .png (300 dpi)
+reports/baseline_vs_proposed.md      results table
+src/process_data.py                  loading, warm-up and quality filters, bootstrap statistics
+src/visualize.py                     figure generation
+survey/                              Apps Script backend and publishing instructions
+```
+
+Reproduce: `pip install pandas numpy matplotlib seaborn`, then `python src/process_data.py` or run the notebook (Kernel -> Restart & Run All).
+
+### Results & Discussion
+
+Evaluation answers only. Filters fixed in advance: practice messages removed; respondents failing the attention check removed (1 of 40, a trained student); answers faster than 1 s treated as accidental clicks and removed (4 rows). This leaves 698 answers from 39 students. Response time is reported as median (p25-p75) and mean +- SD; 95% confidence intervals are cluster-bootstrap intervals over students (2000 resamples, seed 42).
+
+| Group | Students | Answers | Response time, median (p25-p75), s | Response time, mean +- SD, s | p95 / p99, s | Median 95% CI, s | Error rate (guardrail), % | Error 95% CI, % |
+|---|---|---|---|---|---|---|---|---|
+| Untrained (baseline) | 25 | 448 | 14.1 (4.3-16.8) | 11.9 +- 9.5 | 20.7 / 36.3 | [6.1; 15.9] | 13.6 | [10.3; 17.0] |
+| Trained (proposed) | 14 | 250 | 14.0 (5.0-16.9) | 12.5 +- 9.7 | 23.7 / 51.7 | [5.9; 16.2] | 9.2 | [7.2; 11.2] |
+
+![Latency Plot](reports/figures/fig1_latency_vs_load.png)
+
+*Figure 1. (a) Median response time (log scale) and (b) error rate by cue type; shaded bands are 95% bootstrap CIs. Lines connect categories only to show the group difference.*
+
+![Distribution boxplot](reports/figures/fig2_distribution_boxplot.png)
+
+*Figure 2. Response-time distribution per cue type; black bars show the 95% CI of the median.*
+
+**Discussion.** The error rate is the guardrail metric: a group that answers faster but makes more mistakes is not better. Trained students made fewer errors (9.2% vs 13.6%). Their intervals ([7.2; 11.2] vs [10.3; 17.0]) overlap slightly, so this is a possible benefit of training but not a conclusive one, especially with only 14 trained against 25 untrained students. Response times are almost identical (median 14.0 s vs 14.1 s, heavily overlapping intervals), so training did not make students noticeably slower or faster. Familiarity cues were the hardest for both groups (error 22.0% untrained, 15.7% trained) and authority cues the easiest (7.3% and 4.8%). By channel, e-mail had the most errors and SMS the fewest. Both groups were slightly overconfident: mean confidence exceeded accuracy by about 4 percentage points. Limitations: a convenience sample of classmates, self-reported training status, unequal group sizes, 18 fictional messages instead of real inbox behaviour, and wide per-cell intervals (degenerate when a cell has no errors, e.g. SMS for trained students). Vector versions of the figures (`.pdf`) are in `reports/figures/`.
+
+Threat model and metric collection points: [docs/domain_model.md](docs/domain_model.md).
